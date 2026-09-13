@@ -39,15 +39,11 @@ Operano in questo modo:
 mask[i] == 1.0f -> out[i] = a[i]
 mask[i] == 0.0f -> out[i] = b[i]
 */
-ErrorCode tf_select(
-    const Tensor *b,
-    const Tensor *a,
-    const Tensor *mask,
-    Tensor **out
-);
+ErrorCode tf_select(const Tensor *b,const Tensor *a,const Tensor *mask,Tensor **out);
 
 /*
 Operazioni elemento per elemento
+permettono di calcolare il minimo o il massimo tra due tensori
 */
 ErrorCode tf_relu(const Tensor *a, Tensor **out);
 ErrorCode tf_min(const Tensor *a, const Tensor *b, Tensor **out);

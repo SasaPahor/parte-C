@@ -3,7 +3,7 @@
  * Cognome: Pahor
  * Matricola: SM3201535
  */
-#include "ops_matrix.h"
+#include "matrix.h"
 
 #include <stddef.h>
 
@@ -32,9 +32,6 @@ static int dot_compatible(const Tensor *a, const Tensor *b)
 
 /*
  * Calcola il prodotto interno tra due vettori 1D.
- *
- * Restituisce in input: a, b che sono i vettori da moltiplicare
- * Restituisce in output: out che è il puntatore al tensore risultato della moltiplicazione, che contiene la somma di tutti gli elementi di a[i] * b[i]
  */
 ErrorCode tf_dot(const Tensor *a, const Tensor *b, Tensor **out)
 {
@@ -90,10 +87,7 @@ static int matmul_compatible(const Tensor *a, const Tensor *b)
 }
 
 /*
- * Calcola la moltiplicazione tra due matrici 2D.
- *
- * Restituisce in input: a, b che sono le matrici da moltiplicare
- * Restituisce in output: out che è il puntatore al tensore risultato della moltiplicazione, che contiene la matrice prodotto di a e b
+ * Calcola la moltiplicazione riga per colonna tra due matrici 2D.
  */
 ErrorCode tf_matmul(const Tensor *a, const Tensor *b, Tensor **out)
 {
@@ -116,6 +110,11 @@ ErrorCode tf_matmul(const Tensor *a, const Tensor *b, Tensor **out)
     if (result == NULL)
         return ERR_OUT_OF_MEMORY;
 
+    /**
+        * Moltiplicazione tra matrici per elemento, sfruttando la parallelizzazione OpenMP.
+        * La direttiva #pragma omp parallel for collapse(2) permette di parallelizzare i 
+        * cicli annidati, migliorando le prestazioni su sistemi multi-core.
+     */
     #pragma omp parallel for collapse(2)
     for (size_t i = 0; i < m; i++) {
         for (size_t j = 0; j < p; j++) {

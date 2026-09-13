@@ -12,16 +12,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef _WIN32
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
 typedef off_t DiskOffset;
-#else
-typedef int64_t DiskOffset;
-#endif
 
 #define TENSOR_DATA_OFFSET 64
 
@@ -130,103 +126,6 @@ ErrorCode tf_read_tensor_mmap(const char *filename, Tensor **out)
         return ERR_FILE_NOT_FOUND;
     }
 
-#ifdef _WIN32
-    if (fseek(fp, 0, SEEK_END) != 0) {
-        fclose(fp);
-        return ERR_FILE_NOT_FOUND;
-    }
-
-    long file_size = ftell(fp);
-
-    if (file_size < 0) {
-        fclose(fp);
-        return ERR_FILE_NOT_FOUND;
-    }
-
-    if ((size_t)file_size < TENSOR_DATA_OFFSET) {
-        fclose(fp);
-        return ERR_SYNTAX_ERROR;
-    }
-
-    if (fseek(fp, 0, SEEK_SET) != 0) {
-        fclose(fp);
-        return ERR_FILE_NOT_FOUND;
-    }
-
-    unsigned char *buffer = (unsigned char *)malloc((size_t)file_size);
-
-    if (buffer == NULL) {
-        fclose(fp);
-        return ERR_OUT_OF_MEMORY;
-    }
-
-    if (fread(buffer, 1, (size_t)file_size, fp) != (size_t)file_size) {
-        free(buffer);
-        fclose(fp);
-        return ERR_FILE_NOT_FOUND;
-    }
-
-    if (fclose(fp) != 0) {
-        free(buffer);
-        return ERR_FILE_NOT_FOUND;
-    }
-
-    OnDiskTensor *header = (OnDiskTensor *)buffer;
-
-    if (header->ndim <= 0 || header->ndim > MAX_DIM) {
-        free(buffer);
-        return ERR_DIM_MISMATCH;
-    }
-
-    if (header->data_offset != TENSOR_DATA_OFFSET) {
-        free(buffer);
-        return ERR_SYNTAX_ERROR;
-    }
-
-    size_t ndim = (size_t)header->ndim;
-
-    size_t *shape = (size_t *)malloc(ndim * sizeof(size_t));
-
-    if (shape == NULL) {
-        free(buffer);
-        return ERR_OUT_OF_MEMORY;
-    }
-
-    for (size_t i = 0; i < ndim; i++) {
-        if (header->shape[i] <= 0) {
-            free(shape);
-            free(buffer);
-            return ERR_SYNTAX_ERROR;
-        }
-
-        shape[i] = (size_t)header->shape[i];
-    }
-
-    size_t total_size = compute_total_size(shape, ndim);
-    size_t required_size = TENSOR_DATA_OFFSET + total_size * sizeof(float);
-
-    if ((size_t)file_size < required_size) {
-        free(shape);
-        free(buffer);
-        return ERR_SYNTAX_ERROR;
-    }
-
-    Tensor *result = tensor_create(shape, ndim);
-
-    free(shape);
-
-    if (result == NULL) {
-        free(buffer);
-        return ERR_OUT_OF_MEMORY;
-    }
-
-    memcpy(result->data, buffer + TENSOR_DATA_OFFSET, total_size * sizeof(float));
-    free(buffer);
-
-    *out = result;
-
-    return ERR_NONE;
-#else
     int fd = fileno(fp);
 
     if (fd == -1) {
@@ -246,14 +145,7 @@ ErrorCode tf_read_tensor_mmap(const char *filename, Tensor **out)
         return ERR_SYNTAX_ERROR;
     }
 
-    void *mapped = mmap(
-        NULL,
-        (size_t)st.st_size,
-        PROT_READ,
-        MAP_SHARED,
-        fd,
-        0
-    );
+    void *mapped = mmap(NULL,(size_t)st.st_size,PROT_READ,MAP_SHARED,fd,0);
 
     if (mapped == MAP_FAILED) {
         fclose(fp);
@@ -330,5 +222,4 @@ ErrorCode tf_read_tensor_mmap(const char *filename, Tensor **out)
     *out = result;
 
     return ERR_NONE;
-#endif
 }

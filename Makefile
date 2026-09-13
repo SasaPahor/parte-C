@@ -11,9 +11,9 @@ SRCS = main.c \
        stack.c \
        tensor.c \
        error.c \
-       ops_elementwise.c \
-       ops_matrix.c \
-       ops_convolution.c \
+       elementwise.c \
+       matrix.c \
+       convolution.c \
        io_pgm.c \
        io_tensor.c
 

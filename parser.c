@@ -11,6 +11,7 @@
 #include "parser.h"
 #include "error.h"
 
+/* Libera la memoria associata a un token. */
 void token_free(Token *tok) {
     if (!tok) return;
     if (tok->type == TOKEN_TENSOR && tok->as.tensor) {
@@ -22,7 +23,6 @@ void token_free(Token *tok) {
     }
 }
 
-/* Salta spazi e ritorni a capo */
 static void skip_whitespace(FILE *fp) {
     int c;
     while ((c = fgetc(fp)) != EOF) {
@@ -51,6 +51,7 @@ static ErrorCode parse_tensor_literal(FILE *fp, Tensor **out)
     if (!values) {
         return ERR_OUT_OF_MEMORY;
     }
+
 
     while (1) {
         skip_whitespace(fp);

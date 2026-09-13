@@ -3,16 +3,13 @@
  * Cognome: Pahor
  * Matricola: SM3201535
  */
-#include "ops_convolution.h"
 
+#include "convolution.h"
 #include <stddef.h>
 
 /*
-Verifica se due tensori sono compatibili per la convoluzione 2D.
-
-Restituisce in input: a, k che sarebbero i tensori da confrontare
-Restituisce in output: 1 se sono compatibili, 0 altrimenti
- */
+    Verifica se due tensori sono compatibili per la convoluzione 2D.
+*/
 static int conv2d_compatible(const Tensor *a, const Tensor *k)
 {
     if (a == NULL || k == NULL) {
@@ -27,10 +24,10 @@ static int conv2d_compatible(const Tensor *a, const Tensor *k)
 }
 
 /*
-Calcola la convoluzione 2D tra due tensori 2D.
-Restituisce in input: a, k che sono i tensori da convolvere
-Restituisce in output: out che è il puntatore al tensore risultato della convoluzione, che contiene la convoluzione di a e k
- */
+    Calcola la convoluzione 2D tra due tensori 2D.
+    Restituisce in input: a, k che sono i tensori da convolvere
+    Restituisce in output: out che è il puntatore al tensore risultato della convoluzione, che contiene la convoluzione di a e k
+*/
 ErrorCode tf_conv2d(const Tensor *a, const Tensor *k, Tensor **out)
 {
     if (a == NULL || k == NULL || out == NULL) {
@@ -41,6 +38,7 @@ ErrorCode tf_conv2d(const Tensor *a, const Tensor *k, Tensor **out)
         return ERR_DIM_MISMATCH;
     }
 
+    /* Ottieni le dimensioni dei tensori di input e del kernel */
     const size_t height = a->shape[0];
     const size_t width = a->shape[1];
 
@@ -58,6 +56,14 @@ ErrorCode tf_conv2d(const Tensor *a, const Tensor *k, Tensor **out)
     if (result == NULL)
         return ERR_OUT_OF_MEMORY;
 
+
+    /*
+        Calcola la convoluzione con parallelizzazione OpenMP. La direttiva 
+        #pragma omp parallel for collapse(2) indica al compilatore di parallelizzare il ciclo esterno e quello interno, 
+        permettendo l'esecuzione simultanea delle iterazioni dei due cicli annidati. 
+        Questo può migliorare le prestazioni su sistemi con più core, 
+        poiché le iterazioni possono essere distribuite tra i thread disponibili. 
+    */
     #pragma omp parallel for collapse(2)
     for (size_t y = 0; y < height; y++) {
         for (size_t x = 0; x < width; x++) {

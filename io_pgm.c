@@ -94,10 +94,10 @@ ErrorCode tf_write_pgm(const Tensor *a, const char *filename)
 }
 
 /*
-Legge un'immagine PGM binaria P5 e la converte in un tensore 2D.
-Restituisce in input: filename che è il percorso del file PGM da leggere
-Restituisce in output: out che è il puntatore al tensore risultato della lettura, che contiene i valori dei pixel normalizzati in [0, 1]
- */
+    Legge un'immagine PGM binaria P5 e la converte in un tensore 2D.
+    Restituisce in input: filename che è il percorso del file PGM da leggere
+    Restituisce in output: out che è il puntatore al tensore risultato della lettura, che contiene i valori dei pixel normalizzati in [0, 1]
+*/
 static int read_pgm_token(FILE *fp, char *buffer, size_t buffer_size)
 {
     int c;
@@ -152,11 +152,11 @@ static int read_pgm_token(FILE *fp, char *buffer, size_t buffer_size)
 
 
 /*
-converte una stringa in un valore size_t, restituendo 1 se la conversione è andata a buon fine, 0 altrimenti.
+    converte una stringa in un valore size_t, restituendo 1 se la conversione è andata a buon fine, 0 altrimenti.
 
-Prende in input: token che è la stringa da convertire
-Restituisce in output: out che è il puntatore al valore size_t risultante dalla conversione
- */
+    Prende in input: token che è la stringa da convertire
+    Restituisce in output: out che è il puntatore al valore size_t risultante dalla conversione
+*/
 static int parse_size_t_token(const char *token, size_t *out)
 {
     char *endptr;
@@ -179,10 +179,10 @@ static int parse_size_t_token(const char *token, size_t *out)
 }
 
 /*
-Legge un'immagine PGM binaria P5 e la converte in un tensore 2D.
+    Legge un'immagine PGM binaria P5 e la converte in un tensore 2D.
 
-Prende in input: filename che è il percorso del file PGM da leggere
-Restituisce in output: out che è il puntatore al tensore risultato della lettura, che contiene i valori dei pixel normalizzati in [0, 1]
+    Prende in input: filename che è il percorso del file PGM da leggere
+    Restituisce in output: out che è il puntatore al tensore risultato della lettura, che contiene i valori dei pixel normalizzati in [0, 1]
  */
 ErrorCode tf_read_pgm(const char *filename, Tensor **out)
 {

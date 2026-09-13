@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include "error.h"
 
+/*
+    Funzione per la gestione degli errori fatali.
+    Stampa un messaggio di errore e termina il programma con un codice di uscita non nullo.
+*/
 _Noreturn void error_fatal(ErrorCode code, const char *details) {
     fprintf(stderr, "RUN_TIME ERROR [%d]: ", code);
     

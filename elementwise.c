@@ -4,20 +4,21 @@
  * Matricola: SM3201535
  */
 
-#include "ops_elementwise.h"
-
+#include "elementwise.h"
 #include <stddef.h>
 
 /*
-Verifica se due tensori hanno la stessa forma
-*/
+ * Verifica se due tensori hanno la stessa forma
+ */
 static int same_shape(const Tensor *a, const Tensor *b) {
     if (a == NULL || b == NULL) {
         return 0;
     }
+
     if (a->ndim != b->ndim) {
         return 0;
     }
+    
     for (size_t i = 0; i < a->ndim; i++) {
         if (a->shape[i] != b->shape[i]) {
             return 0;
@@ -27,8 +28,8 @@ static int same_shape(const Tensor *a, const Tensor *b) {
 }
 
 /*
-Crea un nuovo tensore con la stessa forma di un tensore dato
-*/
+ * Crea un nuovo tensore con la stessa forma di un tensore dato
+ */
 static ErrorCode create_like(const Tensor *a, Tensor **out) {
     if (a == NULL || out == NULL) {
         return ERR_GENERIC;
@@ -42,6 +43,9 @@ static ErrorCode create_like(const Tensor *a, Tensor **out) {
     return ERR_NONE;
 }
 
+/*
+  Esegue l'addizione elemento per elemento tra due tensori
+*/
 ErrorCode tf_add(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -58,6 +62,7 @@ ErrorCode tf_add(const Tensor *a, const Tensor *b, Tensor **out)
         return err;
     }
 
+    // Calcolo parallelo dell'addizione
     #pragma omp parallel for
     for (size_t i = 0; i < a->total_size; i++) {
         result->data[i] = a->data[i] + b->data[i];
@@ -67,6 +72,10 @@ ErrorCode tf_add(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+ Esegue la sottrazione elemento per elemento tra due tensori
+ sfruttando la parallelizzazione OpenMP come in tf_add.
+*/
 ErrorCode tf_sub(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -92,6 +101,10 @@ ErrorCode tf_sub(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+    Esegue la moltiplicazione elemento per elemento tra due tensori
+    sfruttando la parallelizzazione OpenMP come in tf_add.
+ */
 ErrorCode tf_mul(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -117,6 +130,10 @@ ErrorCode tf_mul(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+    Confronto "minore di" elemento per elemento
+    sfruttando la parallelizzazione OpenMP come in tf_add.
+ */
 ErrorCode tf_less(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -142,6 +159,10 @@ ErrorCode tf_less(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+    Confronto "maggiore di" elemento per elemento
+    sfruttando la parallelizzazione OpenMP come in tf_add.
+ */
 ErrorCode tf_greater(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -167,8 +188,13 @@ ErrorCode tf_greater(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+ Confronto di uguaglianza elemento per elemento
+ sfruttando la parallelizzazione OpenMP come in tf_add.
+*/
 ErrorCode tf_equal(const Tensor *a, const Tensor *b, Tensor **out)
 {
+
     if (a == NULL || b == NULL || out == NULL) {
         return ERR_GENERIC;
     }
@@ -176,6 +202,7 @@ ErrorCode tf_equal(const Tensor *a, const Tensor *b, Tensor **out)
     if (!same_shape(a, b)) {
         return ERR_DIM_MISMATCH;
     }
+
 
     Tensor *result = NULL;
     ErrorCode err = create_like(a, &result);
@@ -192,8 +219,13 @@ ErrorCode tf_equal(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+    Operazione logica AND elemento per elemento
+    sfruttando la parallelizzazione OpenMP come in tf_add.
+ */
 ErrorCode tf_and(const Tensor *a, const Tensor *b, Tensor **out)
 {
+
     if (a == NULL || b == NULL || out == NULL) {
         return ERR_GENERIC;
     }
@@ -210,14 +242,16 @@ ErrorCode tf_and(const Tensor *a, const Tensor *b, Tensor **out)
 
     #pragma omp parallel for
     for (size_t i = 0; i < a->total_size; i++) {
-        result->data[i] =
-            (a->data[i] != 0.0f && b->data[i] != 0.0f) ? 1.0f : 0.0f;
+        result->data[i] = (a->data[i] != 0.0f && b->data[i] != 0.0f) ? 1.0f : 0.0f;
     }
 
     *out = result;
     return ERR_NONE;
 }
 
+/*
+ * Operazione logica OR elemento per elemento
+ */
 ErrorCode tf_or(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -244,8 +278,12 @@ ErrorCode tf_or(const Tensor *a, const Tensor *b, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+    Operazione logica NOT elemento per elemento
+    sfruttando la parallelizzazione OpenMP come in tf_add.
+*/
 ErrorCode tf_not(const Tensor *a, Tensor **out)
-{
+{    
     if (a == NULL || out == NULL) {
         return ERR_GENERIC;
     }
@@ -265,11 +303,10 @@ ErrorCode tf_not(const Tensor *a, Tensor **out)
     return ERR_NONE;
 }
 
-ErrorCode tf_select(
-    const Tensor *b,
-    const Tensor *a,
-    const Tensor *mask,
-    Tensor **out)
+/*
+ * Selezione condizionale basata su una maschera booleana
+ */
+ErrorCode tf_select(const Tensor *b,const Tensor *a,const Tensor *mask,Tensor **out)
 {
     if (a == NULL || b == NULL || mask == NULL || out == NULL) {
         return ERR_GENERIC;
@@ -287,15 +324,15 @@ ErrorCode tf_select(
 
     #pragma omp parallel for
     for (size_t i = 0; i < a->total_size; i++) {
-        result->data[i] = (mask->data[i] == 1.0f)
-            ? a->data[i]
-            : b->data[i];
+        result->data[i] = (mask->data[i] == 1.0f) ? a->data[i] : b->data[i];
     }
-
     *out = result;
     return ERR_NONE;
 }
 
+/*
+ * Funzione di attivazione ReLU elemento per elemento
+ */
 ErrorCode tf_relu(const Tensor *a, Tensor **out)
 {
     if (a == NULL || out == NULL) {
@@ -317,6 +354,9 @@ ErrorCode tf_relu(const Tensor *a, Tensor **out)
     return ERR_NONE;
 }
 
+/*
+ * Estrae il minimo elemento per elemento tra due tensori
+ */
 ErrorCode tf_min(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -335,15 +375,16 @@ ErrorCode tf_min(const Tensor *a, const Tensor *b, Tensor **out)
 
     #pragma omp parallel for
     for (size_t i = 0; i < a->total_size; i++) {
-        result->data[i] = (a->data[i] < b->data[i])
-            ? a->data[i]
-            : b->data[i];
+        result->data[i] = (a->data[i] < b->data[i]) ? a->data[i] : b->data[i];
     }
 
     *out = result;
     return ERR_NONE;
 }
 
+/*
+ * Estrae il massimo elemento per elemento tra due tensori
+ */
 ErrorCode tf_max(const Tensor *a, const Tensor *b, Tensor **out)
 {
     if (a == NULL || b == NULL || out == NULL) {
@@ -362,15 +403,16 @@ ErrorCode tf_max(const Tensor *a, const Tensor *b, Tensor **out)
 
     #pragma omp parallel for
     for (size_t i = 0; i < a->total_size; i++) {
-        result->data[i] = (a->data[i] > b->data[i])
-            ? a->data[i]
-            : b->data[i];
+        result->data[i] = (a->data[i] > b->data[i]) ? a->data[i] : b->data[i];
     }
 
     *out = result;
     return ERR_NONE;
 }
 
+/*
+ * Calcola la somma totale di tutti gli elementi del tensore
+ */
 ErrorCode tf_sum(const Tensor *a, Tensor **out)
 {
     if (a == NULL || out == NULL) {

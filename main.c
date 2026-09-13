@@ -1,8 +1,8 @@
 /*
- * Nome: Sasa
- * Cognome: Pahor
- * Matricola: SM3201535
- */
+  Nome: Sasa
+  Cognome: Pahor
+  Matricola: SM3201535
+*/
 
 #include <stdint.h>
 #include <stdio.h>
@@ -15,19 +15,16 @@
 #include "tensor.h"
 #include "stack.h"
 #include "parser.h"
-#include "ops_elementwise.h"
-#include "ops_matrix.h"
-#include "ops_convolution.h"
+#include "elementwise.h"
+#include "matrix.h"
+#include "convolution.h"
 #include "io_pgm.h"
 #include "io_tensor.h"
 
 
-/* ============================================================
- * FUNZIONI DI SUPPORTO
- * ============================================================ */
 
 /*
- * Controlla che lo stack non sia vuoto.
+  Controlla che lo stack non sia vuoto.
  */
 static void require_stack(Stack *stack, int n)
 {
@@ -37,7 +34,7 @@ static void require_stack(Stack *stack, int n)
 
 
 /*
- * Controlla che un Value sia un tensore.
+  Controlla che un Value sia un tensore.
  */
 static ErrorCode require_tensor(Value *v, Tensor **out)
 {
@@ -53,7 +50,7 @@ static ErrorCode require_tensor(Value *v, Tensor **out)
 
 
 /*
- * Controlla che un Value sia una stringa.
+  Controlla che un Value sia una stringa.
  */
 static ErrorCode require_string(Value *v, char **out)
 {
@@ -69,7 +66,7 @@ static ErrorCode require_string(Value *v, char **out)
 
 
 /*
- * Inserisce un tensore nello stack avvolgendolo in un Value.
+  Inserisce un tensore nello stack avvolgendolo in un Value.
  */
 static void push_tensor(Stack *stack, Tensor *t)
 {
@@ -95,11 +92,11 @@ static void push_tensor(Stack *stack, Tensor *t)
 
 
 /*
- * Converte la shape contenuta in un tensore 1D
- * in un array di size_t.
- *
- * La shape deve contenere 1 o 2 valori interi positivi.
- */
+  Converte la shape contenuta in un tensore 1D
+  in un array di size_t.
+ 
+  La shape deve contenere 1 o 2 valori interi positivi.
+*/
 static ErrorCode get_shape_from_tensor(const Tensor *t,size_t *shape,size_t *ndim)
 {
     size_t i;
@@ -129,16 +126,16 @@ static ErrorCode get_shape_from_tensor(const Tensor *t,size_t *shape,size_t *ndi
 
 
 /*
- * Implementa l'operazione f:
- *
- * ( s v -- a )
- *
- * Crea un tensore della forma s e riempie i suoi elementi
- * ripetendo ciclicamente i valori contenuti in v.
- *
- * Questa operazione realizza il comportamento descritto
- * nella specifica del progetto.
- */
+  Implementa l'operazione f:
+ 
+  ( s v -- a )
+ 
+  Crea un tensore della forma s e riempie i suoi elementi
+  ripetendo ciclicamente i valori contenuti in v.
+ 
+  Questa operazione realizza il comportamento descritto
+  nella specifica del progetto.
+*/
 static ErrorCode tensor_fill_from_vector(const Tensor *shape_tensor,const Tensor *values,Tensor **out)
 {
     size_t shape[MAX_DIM];
@@ -961,10 +958,6 @@ static void execute_operator(Stack *stack, const char *op)
 }
 
 
-/* ============================================================
- * MAIN
- * ============================================================ */
-
 int main(int argc, char *argv[])
 {
     FILE *fp;
@@ -983,9 +976,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /*
-     * Apertura del sorgente.
-     */
     fp = fopen(argv[1], "r");
 
     if (fp == NULL) {
@@ -1016,14 +1006,8 @@ int main(int argc, char *argv[])
         Token tok;
         ErrorCode err;
 
-        /*
-        * Legge il prossimo token.
-        */
         err = parser_next_token(fp, &tok);
 
-        /*
-        * Errore durante il parsing.
-        */
         if (err != ERR_NONE) {
             token_free(&tok);
             fclose(fp);
@@ -1031,19 +1015,12 @@ int main(int argc, char *argv[])
             error_fatal(err, "errore durante il parsing");
         }
 
-        /*
-        * Fine del file sorgente.
-        */
         if (tok.type == TOKEN_EOF) {
             token_free(&tok);
             break;
         }
 
-        /*
-        * Tensore letterale:
-        *
-        * [ 1 2 3 ]
-        */
+
         if (tok.type == TOKEN_TENSOR) {
             Value *v;
 
@@ -1067,11 +1044,6 @@ int main(int argc, char *argv[])
             }
         }
 
-        /*
-        * Stringa:
-        *
-        * "file.pgm"
-        */
         else if (tok.type == TOKEN_STRING) {
             Value *v;
 
@@ -1095,11 +1067,6 @@ int main(int argc, char *argv[])
             }
         }
 
-        /*
-        * Operatore:
-        *
-        * + - * @ . c ...
-        */
         else if (tok.type == TOKEN_OPERATOR) {
             execute_operator(stack, tok.as.op_str);
         }
@@ -1115,16 +1082,10 @@ int main(int argc, char *argv[])
             error_fatal(ERR_SYNTAX_ERROR, "token non riconosciuto");
         }
 
-        /*
-        * Il parser non è più proprietario
-        * delle risorse del token.
-        */
         token_free(&tok);
     }
 
     /*
-     * Fine dell'esecuzione.
-     *
      * stack_free() deve liberare tutti i Value ancora presenti
      * sullo stack e, tramite il reference counting, i Tensor.
      */
