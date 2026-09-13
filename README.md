@@ -162,9 +162,9 @@ Il progetto è organizzato in moduli, ciascuno dedicato a una parte dell'interpr
 - `parser.c/.h` — analisi dei token del linguaggio;
 - `tensor.c/.h` — gestione di tensori e `Value`;
 - `stack.c/.h` — implementazione dello stack;
-- `ops_elementwise.c/.h` — operazioni elemento-per-elemento;
-- `ops_matrix.c/.h` — operazioni matriciali;
-- `ops_convolution.c/.h` — convoluzione 2D;
+- `elementwise.c/.h` — operazioni elemento-per-elemento;
+- `matrix.c/.h` — operazioni matriciali;
+- `convolution.c/.h` — convoluzione 2D;
 - `io_pgm.c/.h` — lettura e scrittura di immagini PGM;
 - `io_tensor.c/.h` — lettura e scrittura del formato TensorForth;
 - `error.c/.h` — gestione e segnalazione degli errori.
