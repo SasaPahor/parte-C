@@ -242,13 +242,6 @@ void tensor_ravel(Tensor *t)
 /*
  * Operatore #:
  * crea un tensore 1D contenente le dimensioni di t.
- *
- * Ad esempio:
- *
- * Tensor con shape [2 3]
- *        |
- *        v
- * Tensor con shape [2] e dati [2 3]
  */
 Tensor *tensor_get_shape(const Tensor *t)
 {
