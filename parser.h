@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include "tensor.h"
+#include "error.h"
 
 // Tipo di token riconosciuto
 typedef enum {
@@ -30,6 +31,6 @@ typedef struct {
 
 /* Inizializza il parser leggendo da file o stringa */
 void token_free(Token *tok);
-Token parser_next_token(FILE *fp);
+ErrorCode parser_next_token(FILE *fp, Token *tok);
 
 #endif /* PARSER_H */

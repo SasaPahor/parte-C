@@ -22,6 +22,6 @@ typedef enum {
  * Stampa un messaggio di errore formattato su stderr e interrompe
  * l'esecuzione del programma con codice di uscita diverso da 0.
  */
-void error_fatal(ErrorCode code, const char *details);
+_Noreturn void error_fatal(ErrorCode code, const char *details);
 
 #endif /* ERROR_H */

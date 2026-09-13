@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include "error.h"
 
-void error_fatal(ErrorCode code, const char *details) {
+_Noreturn void error_fatal(ErrorCode code, const char *details) {
     fprintf(stderr, "RUN_TIME ERROR [%d]: ", code);
     
     switch (code) {

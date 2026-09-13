@@ -34,145 +34,208 @@ static void skip_whitespace(FILE *fp) {
 }
 
 /* Parsing tensori 1D: formato [ 1 2 3 ] con spazi obbligatori */
-static Tensor *parse_tensor_literal(FILE *fp) {
-    // Verifichiamo lo spazio obbligatorio dopo '['
+static ErrorCode parse_tensor_literal(FILE *fp, Tensor **out)
+{
     int next = fgetc(fp);
+
+    /* Verifichiamo lo spazio obbligatorio dopo '[' */
     if (next != ' ' && next != '\t' && next != '\n' && next != '\r') {
-        error_fatal(ERR_SYNTAX_ERROR, "Spazio obbligatorio mancante dopo '['");
+        return ERR_SYNTAX_ERROR;
     }
 
     size_t capacity = 8;
     size_t count = 0;
+
     float *values = (float *)malloc(capacity * sizeof(float));
-    if (!values) error_fatal(ERR_OUT_OF_MEMORY, "Allocazione fallita durante il parsing del tensore");
+
+    if (!values) {
+        return ERR_OUT_OF_MEMORY;
+    }
 
     while (1) {
         skip_whitespace(fp);
+
         int c = fgetc(fp);
 
         if (c == EOF) {
             free(values);
-            error_fatal(ERR_SYNTAX_ERROR, "Parentesi ']' mancante prima della fine del file");
+            return ERR_SYNTAX_ERROR;
         }
 
         if (c == ']') {
             break;
         }
 
-        // Controllo sintattico: vietate le virgole
+        /* Controllo sintattico: vietate le virgole */
         if (c == ',') {
             free(values);
-            error_fatal(ERR_SYNTAX_ERROR, "Trovata virgola non consentita nei tensori");
+            return ERR_SYNTAX_ERROR;
         }
 
         ungetc(c, fp);
 
         float val;
+
         if (fscanf(fp, "%f", &val) == 1) {
+
             if (count >= capacity) {
                 capacity *= 2;
-                float *tmp = (float *)realloc(values, capacity * sizeof(float));
+
+                float *tmp = (float *)realloc(
+                    values,
+                    capacity * sizeof(float)
+                );
+
                 if (!tmp) {
                     free(values);
-                    error_fatal(ERR_OUT_OF_MEMORY, "Realloc fallita per il tensore");
+                    return ERR_OUT_OF_MEMORY;
                 }
+
                 values = tmp;
             }
+
             values[count++] = val;
+
         } else {
             free(values);
-            error_fatal(ERR_SYNTAX_ERROR, "Valore numerico non valido all'interno del tensore");
+            return ERR_SYNTAX_ERROR;
         }
     }
 
     if (count == 0) {
         free(values);
-        error_fatal(ERR_SYNTAX_ERROR, "Impossibile creare un tensore vuoto []");
+        return ERR_SYNTAX_ERROR;
     }
 
     size_t shape[1] = { count };
+
     Tensor *t = tensor_create(shape, 1);
+
     if (!t) {
         free(values);
-        error_fatal(ERR_OUT_OF_MEMORY, "Creazione del tensore fallita");
+        return ERR_OUT_OF_MEMORY;
     }
 
     memcpy(t->data, values, count * sizeof(float));
+
     free(values);
 
-    return t;
+    *out = t;
+
+    return ERR_NONE;
 }
 
 /* Parsing stringhe: "file.pgm" */
-static char *parse_string_literal(FILE *fp) {
+static ErrorCode parse_string_literal(FILE *fp, char **out)
+{
     size_t capacity = 32;
     size_t len = 0;
+
     char *buf = (char *)malloc(capacity);
-    if (!buf) error_fatal(ERR_OUT_OF_MEMORY, "Allocazione memoria per la stringa fallita");
+
+    if (!buf) {
+        return ERR_OUT_OF_MEMORY;
+    }
 
     int c;
+
     while ((c = fgetc(fp)) != EOF && c != '"') {
+
         if (len + 1 >= capacity) {
+
             capacity *= 2;
+
             char *tmp = (char *)realloc(buf, capacity);
+
             if (!tmp) {
                 free(buf);
-                error_fatal(ERR_OUT_OF_MEMORY, "Realloc per stringa fallita");
+                return ERR_OUT_OF_MEMORY;
             }
+
             buf = tmp;
         }
+
         buf[len++] = (char)c;
     }
 
     if (c == EOF) {
         free(buf);
-        error_fatal(ERR_SYNTAX_ERROR, "Doppio apice di chiusura '\"' mancante");
+        return ERR_SYNTAX_ERROR;
     }
 
     buf[len] = '\0';
-    return buf;
+
+    *out = buf;
+
+    return ERR_NONE;
 }
 
 /* Riconosce e restituisce il prossimo token */
-Token parser_next_token(FILE *fp) {
-    Token tok;
-    memset(&tok, 0, sizeof(Token));
+ErrorCode parser_next_token(FILE *fp, Token *tok)
+{
+    if (fp == NULL || tok == NULL) {
+        return ERR_GENERIC;
+    }
+
+    memset(tok, 0, sizeof(Token));
 
     skip_whitespace(fp);
+
     int c = fgetc(fp);
 
     if (c == EOF) {
-        tok.type = TOKEN_EOF;
-        return tok;
+        tok->type = TOKEN_EOF;
+        return ERR_NONE;
     }
 
     if (c == '[') {
-        tok.type = TOKEN_TENSOR;
-        tok.as.tensor = parse_tensor_literal(fp);
-        return tok;
+
+        tok->type = TOKEN_TENSOR;
+
+        ErrorCode err = parse_tensor_literal(fp,&tok->as.tensor);
+
+        if (err != ERR_NONE) {
+            tok->type = TOKEN_EOF;
+            return err;
+        }
+
+        return ERR_NONE;
     }
 
     if (c == '"') {
-        tok.type = TOKEN_STRING;
-        tok.as.str = parse_string_literal(fp);
-        return tok;
+
+        tok->type = TOKEN_STRING;
+
+        ErrorCode err = parse_string_literal(fp,&tok->as.str);
+
+        if (err != ERR_NONE) {
+            tok->type = TOKEN_EOF;
+            return err;
+        }
+
+        return ERR_NONE;
     }
 
     /* Operatore o identificatore singolo/multiplo */
-    tok.type = TOKEN_OPERATOR;
+    tok->type = TOKEN_OPERATOR;
+
     int idx = 0;
-    tok.as.op_str[idx++] = (char)c;
+
+    tok->as.op_str[idx++] = (char)c;
 
     while ((c = fgetc(fp)) != EOF && !isspace(c) && c != '[' && c != '"') {
+
         if (idx < 15) {
-            tok.as.op_str[idx++] = (char)c;
+            tok->as.op_str[idx++] = (char)c;
         }
     }
 
     if (c != EOF && (isspace(c) || c == '[' || c == '"')) {
+
         ungetc(c, fp);
     }
 
-    tok.as.op_str[idx] = '\0';
-    return tok;
+    tok->as.op_str[idx] = '\0';
+
+    return ERR_NONE;
 }

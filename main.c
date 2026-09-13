@@ -32,38 +32,39 @@
 static void require_stack(Stack *stack, int n)
 {
     if (stack == NULL || stack->top + 1 < n)
-        error_fatal(ERR_STACK_UNDERFLOW,
-                    "numero insufficiente di elementi sullo stack");
+        error_fatal(ERR_STACK_UNDERFLOW, "numero insufficiente di elementi sullo stack");
 }
 
 
 /*
  * Controlla che un Value sia un tensore.
  */
-static Tensor *require_tensor(Value *v)
+static ErrorCode require_tensor(Value *v, Tensor **out)
 {
     if (v == NULL)
-        error_fatal(ERR_STACK_UNDERFLOW, "valore nullo");
+        return ERR_STACK_UNDERFLOW;
 
     if (v->type != VAL_TENSOR)
-        error_fatal(ERR_TYPE_MISMATCH, "atteso un tensore");
+        return ERR_TYPE_MISMATCH;
 
-    return v->as.tensor;
+    *out = v->as.tensor;
+    return ERR_NONE;
 }
 
 
 /*
  * Controlla che un Value sia una stringa.
  */
-static char *require_string(Value *v)
+static ErrorCode require_string(Value *v, char **out)
 {
     if (v == NULL)
-        error_fatal(ERR_STACK_UNDERFLOW, "valore nullo");
+        return ERR_STACK_UNDERFLOW;
 
     if (v->type != VAL_STRING)
-        error_fatal(ERR_TYPE_MISMATCH, "attesa una stringa");
+        return ERR_TYPE_MISMATCH;
 
-    return v->as.str;
+    *out = v->as.str;
+    return ERR_NONE;
 }
 
 
@@ -81,16 +82,14 @@ static void push_tensor(Stack *stack, Tensor *t)
 
     if (v == NULL) {
         tensor_release(t);
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile creare il Value del tensore");
+        error_fatal(ERR_OUT_OF_MEMORY, "impossibile creare il Value del tensore");
     }
 
     tensor_release(t);
 
     if (!stack_push(stack, v)) {
         value_release(v);
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile inserire il valore nello stack");
+        error_fatal(ERR_OUT_OF_MEMORY, "impossibile inserire il valore nello stack");
     }
 }
 
@@ -101,39 +100,31 @@ static void push_tensor(Stack *stack, Tensor *t)
  *
  * La shape deve contenere 1 o 2 valori interi positivi.
  */
-static void get_shape_from_tensor(
-    const Tensor *shape_tensor,
-    size_t *shape,
-    size_t *ndim
-)
+static ErrorCode get_shape_from_tensor(const Tensor *t,size_t *shape,size_t *ndim)
 {
     size_t i;
 
-    if (shape_tensor == NULL ||
-        shape_tensor->ndim != 1 ||
-        shape_tensor->total_size < 1 ||
-        shape_tensor->total_size > MAX_DIM) {
+    if (t == NULL || t->ndim != 1 || t->total_size < 1 || t->total_size > MAX_DIM) {
 
-        error_fatal(ERR_DIM_MISMATCH,
-                    "la shape deve essere un vettore di 1 o 2 elementi");
+        return ERR_DIM_MISMATCH;
     }
 
-    *ndim = shape_tensor->total_size;
+    *ndim = t->total_size;
 
     for (i = 0; i < *ndim; i++) {
-        float x = shape_tensor->data[i];
+        float x = t->data[i];
 
         if (!isfinite(x) ||
             x <= 0.0f ||
             floorf(x) != x ||
             x > (float)SIZE_MAX) {
 
-            error_fatal(ERR_DIM_MISMATCH,
-                        "dimensione del tensore non valida");
+            return ERR_DIM_MISMATCH;
         }
 
         shape[i] = (size_t)x;
     }
+    return ERR_NONE;
 }
 
 
@@ -148,37 +139,34 @@ static void get_shape_from_tensor(
  * Questa operazione realizza il comportamento descritto
  * nella specifica del progetto.
  */
-static Tensor *tensor_fill_from_vector(
-    const Tensor *shape_tensor,
-    const Tensor *values
-)
+static ErrorCode tensor_fill_from_vector(const Tensor *shape_tensor,const Tensor *values,Tensor **out)
 {
     size_t shape[MAX_DIM];
     size_t ndim;
     size_t i;
-    Tensor *out;
+    ErrorCode err;
 
     if (values == NULL || values->ndim != 1 ||
         values->total_size == 0) {
 
-        error_fatal(ERR_DIM_MISMATCH,
-                    "il tensore dei valori di f deve essere 1D non vuoto");
+        return ERR_DIM_MISMATCH;
     }
 
-    get_shape_from_tensor(shape_tensor, shape, &ndim);
+    err = get_shape_from_tensor(shape_tensor, shape, &ndim);
+    if (err != ERR_NONE)
+        return err;
 
-    out = tensor_create(shape, ndim);
+    *out = tensor_create(shape, ndim);
 
-    if (out == NULL)
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile allocare il tensore di fill");
+    if (*out == NULL)
+        return ERR_OUT_OF_MEMORY;
 
-    for (i = 0; i < out->total_size; i++) {
-        out->data[i] =
+    for (i = 0; i < (*out)->total_size; i++) {
+        (*out)->data[i] =
             values->data[i % values->total_size];
     }
 
-    return out;
+    return ERR_NONE;
 }
 
 
@@ -192,10 +180,7 @@ typedef ErrorCode (*BinaryTensorOp)(
 );
 
 
-static void execute_binary_tensor_op(
-    Stack *stack,
-    BinaryTensorOp operation
-)
+static void execute_binary_tensor_op(Stack *stack,BinaryTensorOp operation)
 {
     Value *va;
     Value *vb;
@@ -214,8 +199,19 @@ static void execute_binary_tensor_op(
     va = stack_pop(stack);
     vb = stack_pop(stack);
 
-    a = require_tensor(va);
-    b = require_tensor(vb);
+    err = require_tensor(va, &a);
+    if (err != ERR_NONE) {
+        value_release(va);
+        value_release(vb);
+        error_fatal(err, "errore durante il recupero del tensore a");
+    }
+
+    err = require_tensor(vb, &b);
+    if (err != ERR_NONE) {
+        value_release(va);
+        value_release(vb);
+        error_fatal(err, "errore durante il recupero del tensore b");
+    }
 
     err = operation(a, b, &result);
 
@@ -248,8 +244,19 @@ static void execute_conv2d(Stack *stack)
     v_kernel = stack_pop(stack);
     v_tensor = stack_pop(stack);
 
-    kernel = require_tensor(v_kernel);
-    tensor = require_tensor(v_tensor);
+    err = require_tensor(v_kernel, &kernel);
+    if (err != ERR_NONE) {
+        value_release(v_kernel);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del kernel");
+    }
+
+    err = require_tensor(v_tensor, &tensor);
+    if (err != ERR_NONE) {
+        value_release(v_kernel);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
 
     err = tf_conv2d(tensor, kernel, &result);
 
@@ -272,10 +279,7 @@ typedef ErrorCode (*UnaryTensorOp)(
 );
 
 
-static void execute_unary_tensor_op(
-    Stack *stack,
-    UnaryTensorOp operation
-)
+static void execute_unary_tensor_op(Stack *stack,UnaryTensorOp operation)
 {
     Value *va;
     Tensor *a;
@@ -286,7 +290,11 @@ static void execute_unary_tensor_op(
 
     va = stack_pop(stack);
 
-    a = require_tensor(va);
+    err = require_tensor(va, &a);
+    if (err != ERR_NONE) {
+        value_release(va);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
 
     err = operation(a, &result);
 
@@ -315,6 +323,8 @@ static void execute_reshape(Stack *stack)
     size_t shape[MAX_DIM];
     size_t ndim;
 
+    ErrorCode err;
+
     require_stack(stack, 2);
 
     /*
@@ -323,29 +333,46 @@ static void execute_reshape(Stack *stack)
     v_shape = stack_pop(stack);
     v_tensor = stack_pop(stack);
 
-    shape_tensor = require_tensor(v_shape);
-    tensor = require_tensor(v_tensor);
+    err = require_tensor(v_shape, &shape_tensor);
+    if (err != ERR_NONE) {
+        value_release(v_shape);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del tensore shape");
+    }
 
-    get_shape_from_tensor(shape_tensor, shape, &ndim);
+    err = require_tensor(v_tensor, &tensor);
+    if (err != ERR_NONE) {
+        value_release(v_shape);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
+
+    err = get_shape_from_tensor(shape_tensor, shape, &ndim);
+    if (err != ERR_NONE) {
+        value_release(v_shape);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero della shape");
+    }
 
     if (!tensor_reshape(tensor, shape, ndim)) {
         value_release(v_shape);
         value_release(v_tensor);
-
-        error_fatal(ERR_DIM_MISMATCH,
-                    "reshape incompatibile con il numero di elementi");
+        error_fatal(ERR_DIM_MISMATCH,"reshape incompatibile con il numero di elementi");
     }
 
     /*
-     * Il tensor Value può essere rimesso nello stack.
+     * v_shape non serve più.
      */
     value_release(v_shape);
 
+    /*
+     * v_tensor viene rimesso nello stack:
+     * stack_push prende la proprietà del Value.
+     */
     if (!stack_push(stack, v_tensor)) {
         value_release(v_tensor);
 
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile reinserire il tensore nello stack");
+        error_fatal(ERR_OUT_OF_MEMORY,"impossibile reinserire il tensore nello stack");
     }
 }
 
@@ -364,13 +391,23 @@ static void execute_random(Stack *stack)
     size_t ndim;
 
     Tensor *result;
+    ErrorCode err;
 
     require_stack(stack, 1);
 
     v_shape = stack_pop(stack);
-    shape_tensor = require_tensor(v_shape);
 
-    get_shape_from_tensor(shape_tensor, shape, &ndim);
+    err = require_tensor(v_shape, &shape_tensor);
+    if (err != ERR_NONE) {
+        value_release(v_shape);
+        error_fatal(err, "errore durante il recupero del tensore shape");
+    }
+
+    err = get_shape_from_tensor(shape_tensor, shape, &ndim);
+    if (err != ERR_NONE) {
+        value_release(v_shape);
+        error_fatal(err, "errore durante il recupero della shape");
+    }
 
     result = tensor_create(shape, ndim);
 
@@ -396,19 +433,27 @@ static void execute_shape(Stack *stack)
     Value *v;
     Tensor *a;
     Tensor *shape;
+    ErrorCode err;
 
     require_stack(stack, 1);
 
     v = stack_pop(stack);
-    a = require_tensor(v);
+
+    err = require_tensor(v, &a);
+    if (err != ERR_NONE) {
+        value_release(v);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
 
     shape = tensor_get_shape(a);
 
     value_release(v);
 
     if (shape == NULL)
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile creare il tensore shape");
+        error_fatal(
+            ERR_OUT_OF_MEMORY,
+            "impossibile creare il tensore shape"
+        );
 
     push_tensor(stack, shape);
 }
@@ -426,7 +471,9 @@ static void execute_fill(Stack *stack)
 
     Tensor *values;
     Tensor *shape;
-    Tensor *result;
+    Tensor *result = NULL;
+
+    ErrorCode err;
 
     require_stack(stack, 2);
 
@@ -437,13 +484,27 @@ static void execute_fill(Stack *stack)
     v_values = stack_pop(stack);
     v_shape = stack_pop(stack);
 
-    values = require_tensor(v_values);
-    shape = require_tensor(v_shape);
+    err = require_tensor(v_values, &values);
+    if (err != ERR_NONE) {
+        value_release(v_values);
+        value_release(v_shape);
+        error_fatal(err, "errore durante il recupero del tensore dei valori");
+    }
 
-    result = tensor_fill_from_vector(shape, values);
+    err = require_tensor(v_shape, &shape);
+    if (err != ERR_NONE) {
+        value_release(v_values);
+        value_release(v_shape);
+        error_fatal(err, "errore durante il recupero del tensore shape");
+    }
+
+    err = tensor_fill_from_vector(shape, values, &result);
 
     value_release(v_values);
     value_release(v_shape);
+
+    if (err != ERR_NONE)
+        error_fatal(err, "errore durante il fill");
 
     push_tensor(stack, result);
 }
@@ -473,8 +534,19 @@ static void execute_write_pgm(Stack *stack)
     v_filename = stack_pop(stack);
     v_tensor = stack_pop(stack);
 
-    filename = require_string(v_filename);
-    tensor = require_tensor(v_tensor);
+    err = require_string(v_filename, &filename);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del nome del file");
+    }
+
+    err = require_tensor(v_tensor, &tensor);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
 
     err = tf_write_pgm(tensor, filename);
 
@@ -503,7 +575,12 @@ static void execute_read_pgm(Stack *stack)
     require_stack(stack, 1);
 
     v_filename = stack_pop(stack);
-    filename = require_string(v_filename);
+
+    err = require_string(v_filename, &filename);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        error_fatal(err, "errore durante il recupero del nome del file");
+    }
 
     err = tf_read_pgm(filename, &result);
 
@@ -533,15 +610,19 @@ static void execute_read_tensor(Stack *stack)
     require_stack(stack, 1);
 
     v_filename = stack_pop(stack);
-    filename = require_string(v_filename);
+
+    err = require_string(v_filename, &filename);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        error_fatal(err, "errore durante il recupero del nome del file");
+    }
 
     err = tf_read_tensor_mmap(filename, &result);
 
     value_release(v_filename);
 
     if (err != ERR_NONE)
-        error_fatal(err,
-                    "errore nella lettura del file TensorForth");
+        error_fatal(err, "errore nella lettura del file TensorForth");
 
     push_tensor(stack, result);
 }
@@ -571,8 +652,19 @@ static void execute_write_tensor(Stack *stack)
     v_filename = stack_pop(stack);
     v_tensor = stack_pop(stack);
 
-    filename = require_string(v_filename);
-    tensor = require_tensor(v_tensor);
+    err = require_string(v_filename, &filename);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del nome del file");
+    }
+
+    err = require_tensor(v_tensor, &tensor);
+    if (err != ERR_NONE) {
+        value_release(v_filename);
+        value_release(v_tensor);
+        error_fatal(err, "errore durante il recupero del tensore");
+    }
 
     err = tf_write_tensor_file(tensor, filename);
 
@@ -580,8 +672,7 @@ static void execute_write_tensor(Stack *stack)
     value_release(v_tensor);
 
     if (err != ERR_NONE)
-        error_fatal(err,
-                    "errore nella scrittura del file TensorForth");
+        error_fatal(err, "errore nella scrittura del file TensorForth");
 }
 
 
@@ -600,8 +691,7 @@ static void execute_print(Stack *stack)
 
     if (v->type != VAL_TENSOR) {
         value_release(v);
-        error_fatal(ERR_TYPE_MISMATCH,
-                    "l'operatore p richiede un tensore");
+        error_fatal(ERR_TYPE_MISMATCH, "l'operatore p richiede un tensore");
     }
 
     tensor_print(v->as.tensor);
@@ -640,9 +730,29 @@ static void execute_select(Stack *stack)
     v_a = stack_pop(stack);
     v_b = stack_pop(stack);
 
-    mask = require_tensor(v_mask);
-    a = require_tensor(v_a);
-    b = require_tensor(v_b);
+    err = require_tensor(v_mask, &mask);
+    if (err != ERR_NONE) {
+        value_release(v_mask);
+        value_release(v_a);
+        value_release(v_b);
+        error_fatal(err, "errore durante il recupero del tensore mask");
+    }
+
+    err = require_tensor(v_a, &a);
+    if (err != ERR_NONE) {
+        value_release(v_mask);
+        value_release(v_a);
+        value_release(v_b);
+        error_fatal(err, "errore durante il recupero del tensore a");
+    }
+
+    err = require_tensor(v_b, &b);
+    if (err != ERR_NONE) {
+        value_release(v_mask);
+        value_release(v_a);
+        value_release(v_b);
+        error_fatal(err, "errore durante il recupero del tensore b");
+    }
 
     err = tf_select(b, a, mask, &result);
 
@@ -651,8 +761,7 @@ static void execute_select(Stack *stack)
     value_release(v_b);
 
     if (err != ERR_NONE)
-        error_fatal(err,
-                    "errore nell'operazione di selezione");
+        error_fatal(err, "errore nell'operazione di selezione");
 
     push_tensor(stack, result);
 }
@@ -691,7 +800,7 @@ static void execute_operator(Stack *stack, const char *op)
         execute_binary_tensor_op(stack, tf_and);
     }
 
-    else if (strcmp(op, "\\|") == 0) {
+    else if (strcmp(op, "|") == 0) {
         execute_binary_tensor_op(stack, tf_or);
     }
 
@@ -750,16 +859,14 @@ static void execute_operator(Stack *stack, const char *op)
 
         if (v->type != VAL_TENSOR) {
             value_release(v);
-            error_fatal(ERR_TYPE_MISMATCH,
-                        "ravel richiede un tensore");
+            error_fatal(ERR_TYPE_MISMATCH,"ravel richiede un tensore");
         }
 
         tensor_ravel(v->as.tensor);
 
         if (!stack_push(stack, v)) {
             value_release(v);
-            error_fatal(ERR_OUT_OF_MEMORY,
-                        "impossibile reinserire il tensore");
+            error_fatal(ERR_OUT_OF_MEMORY,"impossibile reinserire il tensore");
         }
     }
 
@@ -798,8 +905,7 @@ static void execute_operator(Stack *stack, const char *op)
         require_stack(stack, 1);
 
         if (!stack_dup(stack))
-            error_fatal(ERR_OUT_OF_MEMORY,
-                        "impossibile duplicare il valore sullo stack");
+            error_fatal(ERR_OUT_OF_MEMORY,"impossibile duplicare il valore sullo stack");
     }
 
     else if (strcmp(op, "D") == 0) {
@@ -816,8 +922,7 @@ static void execute_operator(Stack *stack, const char *op)
         require_stack(stack, 2);
 
         if (!stack_over(stack))
-            error_fatal(ERR_OUT_OF_MEMORY,
-                        "impossibile eseguire over sullo stack");
+            error_fatal(ERR_OUT_OF_MEMORY, "impossibile eseguire over sullo stack");
     }
 
     /*
@@ -896,8 +1001,7 @@ int main(int argc, char *argv[])
     if (stack == NULL) {
         fclose(fp);
 
-        error_fatal(ERR_OUT_OF_MEMORY,
-                    "impossibile creare lo stack");
+        error_fatal(ERR_OUT_OF_MEMORY,"impossibile creare lo stack");
     }
 
     /*
@@ -910,22 +1014,36 @@ int main(int argc, char *argv[])
      */
     while (1) {
         Token tok;
-
-        tok = parser_next_token(fp);
+        ErrorCode err;
 
         /*
-         * Fine del file sorgente.
-         */
+        * Legge il prossimo token.
+        */
+        err = parser_next_token(fp, &tok);
+
+        /*
+        * Errore durante il parsing.
+        */
+        if (err != ERR_NONE) {
+            token_free(&tok);
+            fclose(fp);
+            stack_free(stack);
+            error_fatal(err, "errore durante il parsing");
+        }
+
+        /*
+        * Fine del file sorgente.
+        */
         if (tok.type == TOKEN_EOF) {
             token_free(&tok);
             break;
         }
 
         /*
-         * Tensore letterale:
-         *
-         * [ 1 2 3 ]
-         */
+        * Tensore letterale:
+        *
+        * [ 1 2 3 ]
+        */
         if (tok.type == TOKEN_TENSOR) {
             Value *v;
 
@@ -936,8 +1054,7 @@ int main(int argc, char *argv[])
                 fclose(fp);
                 stack_free(stack);
 
-                error_fatal(ERR_OUT_OF_MEMORY,
-                            "impossibile creare Value tensor");
+                error_fatal(ERR_OUT_OF_MEMORY, "impossibile creare Value tensor");
             }
 
             if (!stack_push(stack, v)) {
@@ -946,16 +1063,15 @@ int main(int argc, char *argv[])
                 fclose(fp);
                 stack_free(stack);
 
-                error_fatal(ERR_OUT_OF_MEMORY,
-                            "impossibile inserire il tensore nello stack");
+                error_fatal(ERR_OUT_OF_MEMORY, "impossibile inserire il tensore nello stack");
             }
         }
 
         /*
-         * Stringa:
-         *
-         * "file.pgm"
-         */
+        * Stringa:
+        *
+        * "file.pgm"
+        */
         else if (tok.type == TOKEN_STRING) {
             Value *v;
 
@@ -966,8 +1082,7 @@ int main(int argc, char *argv[])
                 fclose(fp);
                 stack_free(stack);
 
-                error_fatal(ERR_OUT_OF_MEMORY,
-                            "impossibile creare Value string");
+                error_fatal(ERR_OUT_OF_MEMORY, "impossibile creare Value string");
             }
 
             if (!stack_push(stack, v)) {
@@ -976,36 +1091,34 @@ int main(int argc, char *argv[])
                 fclose(fp);
                 stack_free(stack);
 
-                error_fatal(ERR_OUT_OF_MEMORY,
-                            "impossibile inserire la stringa nello stack");
+                error_fatal(ERR_OUT_OF_MEMORY, "impossibile inserire la stringa nello stack");
             }
         }
 
         /*
-         * Operatore:
-         *
-         * + - * @ . c ...
-         */
+        * Operatore:
+        *
+        * + - * @ . c ...
+        */
         else if (tok.type == TOKEN_OPERATOR) {
             execute_operator(stack, tok.as.op_str);
         }
 
         /*
-         * Token sconosciuto.
-         */
+        * Token sconosciuto.
+        */
         else {
             token_free(&tok);
             fclose(fp);
             stack_free(stack);
 
-            error_fatal(ERR_SYNTAX_ERROR,
-                        "token non riconosciuto");
+            error_fatal(ERR_SYNTAX_ERROR, "token non riconosciuto");
         }
 
         /*
-         * Il parser non deve più essere proprietario
-         * delle risorse del token dopo l'esecuzione.
-         */
+        * Il parser non è più proprietario
+        * delle risorse del token.
+        */
         token_free(&tok);
     }
 

@@ -61,8 +61,7 @@ ErrorCode tf_write_pgm(const Tensor *a, const char *filename)
         return ERR_FILE_NOT_FOUND;
     }
 
-    unsigned char *pixels =
-        (unsigned char *)malloc(a->total_size * sizeof(unsigned char));
+    unsigned char *pixels = (unsigned char *)malloc(a->total_size * sizeof(unsigned char));
 
     if (pixels == NULL) {
         fclose(fp);
@@ -276,8 +275,7 @@ ErrorCode tf_read_pgm(const char *filename, Tensor **out)
 
     const size_t pixel_count = height * width;
 
-    unsigned char *pixels =
-        (unsigned char *)malloc(pixel_count * sizeof(unsigned char));
+    unsigned char *pixels = (unsigned char *)malloc(pixel_count * sizeof(unsigned char));
 
     if (pixels == NULL) {
         tensor_release(result);
