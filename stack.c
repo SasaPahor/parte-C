@@ -1,3 +1,9 @@
+/*
+ * Nome: Sasa
+ * Cognome: Pahor
+ * Matricola: SM3201535
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "stack.h"

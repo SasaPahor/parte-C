@@ -1,3 +1,7 @@
+## Nome: Sasa
+## Cognome: Pahor
+## Matricola: SM3201535
+
 # TensorForth
 
 TensorForth è un interprete per un linguaggio di programmazione **stack-based**, sviluppato in C nell'ambito del progetto di Programmazione Avanzata e Parallela.

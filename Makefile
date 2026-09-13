@@ -1,3 +1,7 @@
+# Nome: Sasa
+# Cognome : Pahor
+# Matricola: SM3201535
+
 CC = gcc
 
 CFLAGS = -Wall -Wextra -std=c11 -O2 -fopenmp
